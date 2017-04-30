@@ -10,6 +10,7 @@ void portFile(string filename) {
 	contents = fixBoxApi(contents);
 	contents = removeBorderWidth(contents);
 	contents = fixGtkInit(contents);
+	contents = fixCssProvider(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
@@ -63,6 +64,51 @@ string fixGtkInit(string input) {
 unittest {
 	assert(fixGtkInit("gtk_init (&argc, &argv);") == "gtk_init ();\n");
 	assert(fixGtkInit("dialog_gtk_init (foo);") == "dialog_gtk_init (foo);\n");
+}
+
+string fixCssProvider(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		auto nComma = 2;
+		size_t index = line.indexOf("gtk_css_provider_load_from_data");
+
+		if (index == -1) {
+			index = line.indexOf("gtk_css_provider_load_from_file");
+			if (index == -1) {
+				index = line.indexOf("gtk_css_provider_load_from_path");
+			}
+		} else {
+			nComma = 3;
+		}
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		// These 3 functions all lost their last argument, so remove it.
+		auto openParenIndex = line.indexOf('(');
+		if (openParenIndex == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		auto commaIndex = line.skipToNested(',', nComma, openParenIndex + 1);
+		if (commaIndex == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		buffer ~= line[0..commaIndex];
+		buffer ~= ");\n";
+	}
+
+	return buffer;
+}
+unittest {
+	assert(fixCssProvider("gtk_css_provider_load_from_data (1, 2, 3, 4)") ==
+	                      "gtk_css_provider_load_from_data (1, 2, 3);\n");
 }
 
 
