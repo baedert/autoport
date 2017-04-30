@@ -8,11 +8,58 @@ void portFile(string filename) {
 	string contents = readText(filename);
 
 	contents = fixBoxApi(contents);
-
-
+	contents = removeBorderWidth(contents);
+	contents = fixGtkInit(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
+}
+
+string removeBorderWidth(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_container_set_border_width");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		// The "fix" for this is to not use it.
+	}
+
+	return buffer;
+}
+
+string fixGtkInit(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_init");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		// The "fix" for this is to not use it.
+		auto openParenIndex = line.indexOf('(');
+
+		if (openParenIndex == -1) {
+			// Huh?
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		buffer ~= line[0..openParenIndex + 1];
+		buffer ~= ");\n";
+	}
+
+	return buffer;
+}
+unittest {
+	assert(fixGtkInit("gtk_init (&argc, &argv);") == "gtk_init ();\n");
 }
 
 
