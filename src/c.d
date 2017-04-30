@@ -36,6 +36,7 @@ string fixGtkInit(string input) {
 	string buffer;
 
 	foreach (line; input.lineSplitter) {
+		import std.ascii: isWhite;
 		size_t index = line.indexOf("gtk_init");
 
 		if (index == -1) {
@@ -43,10 +44,11 @@ string fixGtkInit(string input) {
 			continue;
 		}
 
-		// The "fix" for this is to not use it.
+		// fix by removing the parameters entirely
 		auto openParenIndex = line.indexOf('(');
 
-		if (openParenIndex == -1) {
+		if (openParenIndex == -1 ||
+		    (index > 0 && !line[index - 1].isWhite())) {
 			// Huh?
 			buffer ~= line ~ "\n";
 			continue;
@@ -60,6 +62,7 @@ string fixGtkInit(string input) {
 }
 unittest {
 	assert(fixGtkInit("gtk_init (&argc, &argv);") == "gtk_init ();\n");
+	assert(fixGtkInit("dialog_gtk_init (foo);") == "dialog_gtk_init (foo);\n");
 }
 
 
