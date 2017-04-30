@@ -32,9 +32,9 @@ string fixBoxApi(string input) {
 		}
 
 		// Remove last 3 parameters
-		// In other words, Everything after the first comma in the
-		// gtk_box_ call.
-		size_t endIndex = skipToNested(line, ',', line.indexOf('(') + 1);
+		// In other words, Everything after the second comma in the
+		// gtk_box_ call. First the instance, then the child.
+		size_t endIndex = skipToNested(line, ',', 2, line.indexOf('(') + 1);
 		if (endIndex == cast(size_t)-1) {
 			// No comma found. Already ported?
 			buffer ~= line ~ "\n";
@@ -47,17 +47,18 @@ string fixBoxApi(string input) {
 	return buffer;
 }
 unittest {
-	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d)") == "  gtk_box_pack_start(a);\n");
+	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d)") == "  gtk_box_pack_start(a, b);\n");
 }
 
 
 pure @nogc
-size_t skipToNested(string line, char c, size_t start = 0) {
+size_t skipToNested(string line, char c, int nOccurrences, size_t start = 0) {
 	size_t index = start;
 
 	assert(start < line.length);
 
 	size_t parenLevel = 0;
+	int occurrences = 0;
 	for (auto i = start; i < line.length; i ++) {
 		switch(line[i]) {
 			case '(':
@@ -67,13 +68,16 @@ size_t skipToNested(string line, char c, size_t start = 0) {
 				parenLevel --;
 				break;
 			default:
-				if (line[i] == c && parenLevel == 0)
-					return i;
+				if (line[i] == c && parenLevel == 0) {
+					occurrences ++;
+					if (occurrences == nOccurrences)
+						return i;
+				}
 		}
 	}
 	return -1;
 }
 unittest {
-	assert(skipToNested("foo(foo(a,b),c)", ',') == cast(size_t)-1);
-	assert(skipToNested("foo(foo(a,b),c)", ',', 4) == 12);
+	assert(skipToNested("foo(foo(a,b),c)", ',', 1) == cast(size_t)-1);
+	assert(skipToNested("foo(foo(a,b),c)", ',', 1, 4) == 12);
 }
