@@ -11,6 +11,7 @@ void portFile(string filename) {
 	contents = removeBorderWidth(contents);
 	contents = fixGtkInit(contents);
 	contents = fixCssProvider(contents);
+	contents = fixShowAll(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
@@ -144,6 +145,30 @@ string fixBoxApi(string input) {
 }
 unittest {
 	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d)") == "  gtk_box_pack_start(a, b);\n");
+}
+
+
+string fixShowAll(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_widget_show_all");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		buffer ~= line[0..index];
+		buffer ~= "gtk_widget_show";
+		buffer ~= line[index + "gtk_widget_show_all".length..$];
+		buffer ~= "\n";
+	}
+
+	return buffer;
+}
+unittest {
+	assert(fixShowAll("abc gtk_widget_show_all (foo)") == "abc gtk_widget_show (foo)\n");
 }
 
 
