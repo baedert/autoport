@@ -13,6 +13,7 @@ void portFile(string filename) {
 	contents = fixGtkInit(contents);
 	contents = fixCssProvider(contents);
 	contents = fixShowAll(contents);
+	contents = fixNoShowAll(contents);
 	contents = fixMisc(contents);
 
 	// Write result back
@@ -170,6 +171,23 @@ string fixShowAll(string input) {
 }
 unittest {
 	assert(fixShowAll("abc gtk_widget_show_all (foo)") == "abc gtk_widget_show (foo)\n");
+}
+
+string fixNoShowAll(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_widget_set_no_show_all");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		// The "fix" for this is to not use it.
+	}
+
+	return buffer;
 }
 
 string fixMisc(string input) {
