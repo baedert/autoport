@@ -1,6 +1,7 @@
 import std.file;
 import std.stdio;
 import std.string;
+import std.algorithm;
 
 void portFile(string filename) {
 	// For better debuggability, we read the entire file into memory once,
@@ -12,6 +13,7 @@ void portFile(string filename) {
 	contents = fixGtkInit(contents);
 	contents = fixCssProvider(contents);
 	contents = fixShowAll(contents);
+	contents = fixMisc(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
@@ -164,36 +166,98 @@ string fixShowAll(string input) {
 		buffer ~= line[index + "gtk_widget_show_all".length..$];
 		buffer ~= "\n";
 	}
-
 	return buffer;
 }
 unittest {
 	assert(fixShowAll("abc gtk_widget_show_all (foo)") == "abc gtk_widget_show (foo)\n");
 }
 
+string fixMisc(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_misc_set_alignment");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		auto openParenIndex = line.indexOf('(');
+		if (openParenIndex == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+		// If the first param contains the word "label", we just assume
+		// that it's a GtkLabel. If the used API then was _set_alignment,
+		// we use gtk_label_set_{x,y}align instead.
+		auto firstCommaIndex = line.skipToNested(',', 1, openParenIndex + 1);
+		if (firstCommaIndex == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+		string firstParam = line[openParenIndex + 1..firstCommaIndex];
+
+
+		// TODO: it's hard to make this all resilient against non-conforming
+		//       input since we are changing @buffer everywhere.
+
+		if (firstParam.canFind("label")) {
+			firstParam = firstParam.replace("GTK_MISC", "GTK_LABEL");
+			// Replace with gtk_label_set_xalign and gtk_label_set_yalign.
+			auto nonWhitespaceIndex = line.skipToNonWhitespace();
+			string indentation = line[0..nonWhitespaceIndex];
+			buffer ~= indentation ~ "gtk_label_set_xalign";
+			buffer ~= line[nonWhitespaceIndex + "gtk_misc_set_alignment".length..openParenIndex];
+			buffer ~= "(" ~ firstParam ~ ",";
+			auto secondCommaIndex = line.skipToNested(',', 1, firstCommaIndex + 1);
+
+			string secondParam = line[firstCommaIndex + 1..secondCommaIndex];
+			buffer ~= secondParam ~ ");\n";
+
+			buffer ~= indentation ~ "gtk_label_set_yalign";
+			buffer ~= line[nonWhitespaceIndex + "gtk_misc_set_alignment".length..openParenIndex];
+			buffer ~= "(";
+			buffer ~= firstParam ~ ",";
+			auto closeParenIndex = line.skipToNested(')', 1, secondCommaIndex + 1);
+			string thirdParam = line[secondCommaIndex + 1..closeParenIndex];
+			buffer ~= thirdParam ~ ");\n";
+		} else {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+	}
+
+	return buffer;
+}
+
+unittest {
+	assert(fixMisc("gtk_misc_set_alignment (zomg)") == "gtk_misc_set_alignment (zomg)\n");
+	assert(fixMisc("\t  gtk_misc_set_alignment (label, 0.0, 1.0)") == "\t  gtk_label_set_xalign (label, 0.0);\n\t  gtk_label_set_yalign (label, 1.0);\n");
+}
 
 pure @nogc
-size_t skipToNested(string line, char c, int nOccurrences, size_t start = 0) {
+size_t skipToNested(string line, char needle, int nOccurrences, size_t start = 0) {
 	size_t index = start;
 
 	assert(start < line.length);
 
-	size_t parenLevel = 0;
+	int parenLevel = 0;
+
 	int occurrences = 0;
 	for (auto i = start; i < line.length; i ++) {
-		switch(line[i]) {
-			case '(':
-				parenLevel ++;
-				break;
-			case ')':
-				parenLevel --;
-				break;
-			default:
-				if (line[i] == c && parenLevel == 0) {
-					occurrences ++;
-					if (occurrences == nOccurrences)
-						return i;
-				}
+		auto c = line[i];
+
+		if (c == needle && parenLevel == 0) {
+			occurrences ++;
+			if (occurrences == nOccurrences)
+				return i;
+		}
+
+		if (c == '(') {
+			parenLevel ++;
+		} else if (c == ')') {
+			parenLevel --;
 		}
 	}
 	return -1;
@@ -201,4 +265,19 @@ size_t skipToNested(string line, char c, int nOccurrences, size_t start = 0) {
 unittest {
 	assert(skipToNested("foo(foo(a,b),c)", ',', 1) == cast(size_t)-1);
 	assert(skipToNested("foo(foo(a,b),c)", ',', 1, 4) == 12);
+	assert(skipToNested("a(b)c)", ')', 1) == 5);
+}
+
+pure @nogc
+size_t skipToNonWhitespace(string line) {
+	import std.ascii: isWhite;
+	for (auto i = 0; i < line.length; i ++) {
+		if (!line[i].isWhite()) {
+			return i;
+		}
+	}
+	return -1;
+}
+unittest {
+	assert(skipToNonWhitespace("   b") == 3);
 }
