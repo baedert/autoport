@@ -435,6 +435,7 @@ string removeVoidFunctions(string input) {
 		"gtk_window_set_has_resize_grip",
 		"gtk_tree_view_set_rules_hint",
 		"gdk_window_process_updates",
+		"gdk_window_set_background_pattern"
 	];
 
 	string buffer;
