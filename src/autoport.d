@@ -28,8 +28,8 @@ void main(string[] args) {
 			}
 			break;
 
-			case "xml": {
-				import xml;
+			case "ui": {
+				import ui;
 				portFile(filename);
 			}
 			break;

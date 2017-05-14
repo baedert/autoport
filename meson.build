@@ -5,7 +5,7 @@ executable(
   'autoport',
   'src/autoport.d',
   'src/c.d',
-  'src/xml.d',
+  'src/ui.d',
   'src/vala.d',
   d_args: [
     '-unittest',

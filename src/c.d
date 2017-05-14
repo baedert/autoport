@@ -2,6 +2,7 @@ import std.file;
 import std.stdio;
 import std.string;
 import std.algorithm;
+import std.range;
 
 void portFile(string filename) {
 	// For better debuggability, we read the entire file into memory once,
@@ -15,9 +16,27 @@ void portFile(string filename) {
 	contents = fixShowAll(contents);
 	contents = fixNoShowAll(contents);
 	contents = fixMisc(contents);
+	contents = fixButtonApi(contents);
+	contents = fixExpanderApi(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
+}
+
+string fixExpanderApi(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_expander_set_spacing");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+	}
+
+	return buffer;
+
 }
 
 string removeBorderWidth(string input) {
@@ -254,6 +273,41 @@ unittest {
 	assert(fixMisc("\t  gtk_misc_set_alignment (label, 0.0, 1.0)") == "\t  gtk_label_set_xalign (label, 0.0);\n\t  gtk_label_set_yalign (label, 1.0);\n");
 }
 
+string fixButtonApi(string input) {
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index = line.indexOf("gtk_button_set_always_show_image");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		// The "fix" for this is to not use it.
+	}
+
+	//foreach (line; buffer.lineSplitter) {
+		//size_t index = line.indexOf("gtk_button_set_image");
+
+		//if (index == -1) {
+			//buffer ~= line ~ "\n";
+			//continue;
+		//}
+	//}
+
+	//foreach (line; buffer.lineSplitter) {
+		//size_t index = line.indexOf("gtk_expander_set_spacing");
+
+		//if (index == -1) {
+			//buffer ~= line ~ "\n";
+			//continue;
+		//}
+	//}
+
+	return buffer;
+}
+
 pure @nogc
 size_t skipToNested(string line, char needle, int nOccurrences, size_t start = 0) {
 	size_t index = start;
@@ -298,4 +352,336 @@ size_t skipToNonWhitespace(string line) {
 }
 unittest {
 	assert(skipToNonWhitespace("   b") == 3);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct Token {
+	string text;
+	size_t start;
+	size_t end;
+}
+
+//pure @nogc
+auto tokenize(string input) {
+	pure @nogc
+	bool splitsToken(const char c) {
+		switch(c) {
+		case '(':
+		case ')':
+		case ';':
+		case '<':
+		case '>':
+		case ',':
+		case '%':
+		case '=':
+		case '^':
+		case ' ':
+		case '\t':
+		case '\n':
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	struct Result {
+		string input;
+		size_t cur;
+		size_t tok_len;
+		bool _empty = false;
+
+		//pure @nogc
+		this(string i) {
+			input = i;
+			// @cur should always point to *after* the current token
+			cur = 0;
+			tok_len = 0;
+
+			if (!empty)
+				popFront(); // Read current token
+		}
+
+		//pure @nogc @property
+		Token front() {
+			return Token(input[cur-tok_len..cur], cur-tok_len, cur);
+		}
+
+		//pure @nogc @property
+		bool empty() {
+			return _empty;
+		}
+
+		//pure @nogc
+		void popFront() {
+			assert(!empty);
+			import std.ascii: isWhite;
+			size_t inc = 0;
+
+			// Skip whitespace
+			while(cur < input.length && input[cur].isWhite()) {
+				cur ++;
+			}
+
+			if (cur >= input.length) {
+				_empty = true;
+				return;
+			}
+
+			if (splitsToken(input[cur])) {
+				// This is not a full C tokenizer, so just handle every
+				// splitting char as one token.
+				cur ++;
+				tok_len = 1;
+				return;
+			}
+
+			do {
+				inc ++;
+			} while (cur + inc < input.length && !splitsToken(input[cur + inc]));
+			tok_len = inc;
+			cur+= inc;
+		}
+	}
+
+	Result r;              // can define a range object
+	if (r.empty) {}   // can test for empty
+	r.popFront();     // can invoke popFront()
+	auto h = r.front; // can get the front of the range of non-void type
+
+
+
+	return Result(input);
+}
+unittest {
+	auto toks = "".tokenize();
+	assert(toks.empty);
+
+	toks = "a;b".tokenize();
+	assert(toks.front.text == "a");
+	toks.popFront();
+	assert(toks.front.text == ";");
+	toks.popFront();
+	assert(toks.front.text == "b");
+	toks.popFront();
+	assert(toks.empty());
+
+
+	import std.array: array;
+	toks = "a".tokenize();
+	assert(!toks.empty);
+
+	toks = "foobar 123 ;%^".tokenize();
+	assert(toks.array().length == 5);
+	//assert(toks.array() == ["foobar", "123", ";", "%", "^"]);
+
+	toks = "foobar ();".tokenize();
+	assert(toks.array.length == 4);
+}
+
+
+
+
+auto testRange(string input) {
+	struct Result {
+		int c = 0;
+
+		@property
+		bool empty(){ return c == 10; }
+		@property
+		auto front(){ return c; }
+		void popFront() { c++; }
+	}
+
+	return Result();
+}
+
+void takeTestRange(R)(R range) {
+	foreach (c; range)
+		writeln(c);
+}
+
+
+
+
+
+void portFile2(string filename) {
+	string contents = readText(filename);
+	contents = contents.tokenize.removeFunctions();
+
+	writeln("Output:\n", contents);
+}
+
+
+
+
+
+// Ideally these should return void...
+const string[] functionsToRemove = [
+	"gdk_window_process_updates",
+];
+
+string removeFunctions(R)(R tokens)
+	if (isInputRange!R)
+{
+	while (!tokens.empty) {
+		auto tok = tokens.front;
+		// Here we handle different function calls and their replacements.
+		int index = -1;
+		for (int i = 0; i < functionsToRemove.length; i ++) {
+			if (tok.text == functionsToRemove[i]) {
+				index = i;
+				break;
+			}
+		}
+
+		if (index != -1) {
+			// Read until end of function call (possibly over muiltiple lines)
+			// and remove all of it.
+			auto func = parseFunctionCall(tokens, tok);
+			writeln(func);
+		}
+
+		if (tokens.empty)
+			break;
+
+		tokens.popFront();
+	}
+
+	return "";
+}
+
+struct FunctionCall {
+	string functionName;
+	string[] args = new string[0];
+}
+FunctionCall parseFunctionCall(R)(ref R tokens, ref Token nameTok)
+	if (isInputRange!R)
+{
+	auto call = FunctionCall();
+	call.functionName = nameTok.text;
+
+	assert(tokens.front.text == "gdk_window_process_updates");
+	assert(tokens.front == nameTok);
+
+	tokens.popFront();
+	assert(tokens.front.text == "(");
+	tokens.popFront();
+
+	int curArg = 0;
+	int identLevel = 0;
+	size_t currectArgStart = 0;
+	size_t endOfLastArg = tokens.front.start;
+	while (!tokens.empty) {
+		if (tokens.front.text == ")") {
+			if (identLevel == 0) {
+				// End of the function call
+				call.args ~= tokens.input[endOfLastArg..tokens.front.start];
+				break;
+			}
+
+			identLevel --;
+		} else if (tokens.front.text == "(") {
+			identLevel ++;
+		} else if (tokens.front.text == ",") {
+			if (identLevel == 0) {
+				// End of argument
+				call.args ~= tokens.input[endOfLastArg..tokens.front.start];
+				endOfLastArg = tokens.front.end;
+			}
+		}
+
+		tokens.popFront();
+	}
+
+	return call;
 }
