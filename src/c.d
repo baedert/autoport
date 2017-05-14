@@ -443,6 +443,7 @@ string removeVoidFunctions(string input) {
 		"gtk_box_set_center_widget",
 		"gtk_label_set_angle",
 		"gtk_container_class_handle_border_width",
+		"gtk_style_context_invalidate",
 		"gdk_window_process_updates",
 	];
 
@@ -477,7 +478,7 @@ string replaceFunctions(string input) {
 	// Of course, fixing things that way is not ideal but it makes the project compile.
 	const Func[] funcs = [
 		Func("gtk_stock_lookup", "FALSE"),
-		Func("gdk_cairo_should_draw_window", "TRUE"),
+		Func("gtk_cairo_should_draw_window", "TRUE"),
 		Func("gtk_dialog_get_action_area", "gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0)"), // *shrug*.
 		Func("gtk_dialog_get_content_area", "gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0)"), // *shrug*.
 		Func("gtk_container_get_border_width", "0"),
