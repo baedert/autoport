@@ -10,50 +10,15 @@ void portFile(string filename) {
 	string contents = readText(filename);
 
 	contents = fixBoxApi(contents);
-	contents = removeBorderWidth(contents);
 	contents = fixGtkInit(contents);
 	contents = fixCssProvider(contents);
 	contents = fixShowAll(contents);
-	contents = fixNoShowAll(contents);
 	contents = fixMisc(contents);
-	contents = fixButtonApi(contents);
-	contents = fixExpanderApi(contents);
+	contents = removeVoidFunctions(contents);
+	contents = removeBoolFunctions(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
-}
-
-string fixExpanderApi(string input) {
-	string buffer;
-
-	foreach (line; input.lineSplitter) {
-		size_t index = line.indexOf("gtk_expander_set_spacing");
-
-		if (index == -1) {
-			buffer ~= line ~ "\n";
-			continue;
-		}
-	}
-
-	return buffer;
-
-}
-
-string removeBorderWidth(string input) {
-	string buffer;
-
-	foreach (line; input.lineSplitter) {
-		size_t index = line.indexOf("gtk_container_set_border_width");
-
-		if (index == -1) {
-			buffer ~= line ~ "\n";
-			continue;
-		}
-
-		// The "fix" for this is to not use it.
-	}
-
-	return buffer;
 }
 
 string fixGtkInit(string input) {
@@ -138,15 +103,17 @@ unittest {
 string fixBoxApi(string input) {
 	string buffer;
 
-	// TODO: Handle pack_{start, end} calls over multiple lines
-
-	foreach (line; input.lineSplitter) {
+	auto lines = input.lineSplitter();
+	string line;
+	while (!lines.empty) {
+		line = lines.front;
 		size_t index = line.indexOf("gtk_box_pack_start");
 		if (index == -1)
 			index = line.indexOf("gtk_box_pack_end");
 
 		if (index == -1) {
 			buffer ~= line ~ "\n";
+			lines.popFront();
 			continue;
 		}
 
@@ -157,16 +124,39 @@ string fixBoxApi(string input) {
 		if (endIndex == cast(size_t)-1) {
 			// No comma found. Already ported?
 			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		} else if (line.strip()[$ - 1] != ';') {
+			// The expression did *not* end on this line.
+			buffer ~= line[0..endIndex] ~ ");\n";
+			// Now the next line, which should contain either one, two or three of
+			// the leftover parameters.
+			lines.popFront();
+			line = lines.front;
+			// Do not append this line to @buffer in any case.
+			if (line.strip()[$ - 1] != ';') {
+				// Over >= 3 lines...
+				lines.popFront();
+				line = lines.front;
+				if (line.strip()[$ - 1] != ';') {
+					// This HAS to be the last one.
+				}
+			}
+			// Ok.
+			lines.popFront();
 			continue;
 		}
 		buffer ~= line[0..endIndex];
 		buffer ~= ");\n";
+		lines.popFront();
 	}
 
 	return buffer;
 }
 unittest {
-	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d)") == "  gtk_box_pack_start(a, b);\n");
+	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d);") == "  gtk_box_pack_start(a, b);\n");
+	assert(fixBoxApi("gtk_box_pack_start(a, b, c, d, e);") == "gtk_box_pack_start(a, b);\n");
+	assert(fixBoxApi("gtk_box_pack_start(a,b,\nc,d,e);") == "gtk_box_pack_start(a,b);\n");
 }
 
 
@@ -190,23 +180,6 @@ string fixShowAll(string input) {
 }
 unittest {
 	assert(fixShowAll("abc gtk_widget_show_all (foo)") == "abc gtk_widget_show (foo)\n");
-}
-
-string fixNoShowAll(string input) {
-	string buffer;
-
-	foreach (line; input.lineSplitter) {
-		size_t index = line.indexOf("gtk_widget_set_no_show_all");
-
-		if (index == -1) {
-			buffer ~= line ~ "\n";
-			continue;
-		}
-
-		// The "fix" for this is to not use it.
-	}
-
-	return buffer;
 }
 
 string fixMisc(string input) {
@@ -273,40 +246,87 @@ unittest {
 	assert(fixMisc("\t  gtk_misc_set_alignment (label, 0.0, 1.0)") == "\t  gtk_label_set_xalign (label, 0.0);\n\t  gtk_label_set_yalign (label, 1.0);\n");
 }
 
-string fixButtonApi(string input) {
+// These functions have no replacement and they return void
+// so we can just remove the line(s) they occur on.
+string removeVoidFunctions(string input) {
+	const string[] funcs = [
+		"gtk_style_context_set_junction_sides",
+		"gtk_button_set_always_show_image",
+		"gtk_container_set_border_width",
+		"gtk_expander_set_spacing",
+		"gtk_widget_set_no_show_all",
+		"gtk_button_set_image",
+		"gdk_window_process_updates"
+	];
+
+	string buffer;
+
+	foreach (line; input.lineSplitter()) {
+		size_t index;
+		size_t funcIndex;
+
+		for (auto i = 0; i < funcs.length; i ++) {
+			if ((index = line.indexOf(funcs[i])) != -1) {
+				funcIndex = i;
+				break;
+			}
+		}
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+	}
+
+	return buffer;
+}
+unittest {
+	assert(removeVoidFunctions("a\ngtk_style_context_set_junction_sides(a,b);\nb") == "a\nb\n");
+}
+
+string removeBoolFunctions(string input) {
+	struct Func { string name; string replacement; }
+	// These have no replacement, but their value can be replaced by a simple TRUE or FALSE.
+	// Of course, fixing things that way is not ideal but it makes the project compile.
+	const Func[] funcs = [
+		Func("gtk_stock_lookup", "FALSE"),
+		Func("gdk_cairo_should_draw_window", "TRUE")
+	];
 	string buffer;
 
 	foreach (line; input.lineSplitter) {
-		size_t index = line.indexOf("gtk_button_set_always_show_image");
+		size_t index;
+		size_t funcIndex;
+
+		for (auto i = 0; i < funcs.length; i ++) {
+			if ((index = line.indexOf(funcs[i].name)) != -1) {
+				funcIndex = i;
+				break;
+			}
+		}
 
 		if (index == -1) {
 			buffer ~= line ~ "\n";
 			continue;
 		}
 
-		// The "fix" for this is to not use it.
+		// Replace function call with replacement
+		size_t openParenIndex =  line[index..$].indexOf('(') + index;
+		size_t closeParenIndex = line.skipToNested(')', 0, openParenIndex + 1);
+		buffer ~= line[0..index];
+		buffer ~= funcs[funcIndex].replacement;
+		buffer ~= line[closeParenIndex + 1..$];
+		buffer ~= "\n";
 	}
-
-	//foreach (line; buffer.lineSplitter) {
-		//size_t index = line.indexOf("gtk_button_set_image");
-
-		//if (index == -1) {
-			//buffer ~= line ~ "\n";
-			//continue;
-		//}
-	//}
-
-	//foreach (line; buffer.lineSplitter) {
-		//size_t index = line.indexOf("gtk_expander_set_spacing");
-
-		//if (index == -1) {
-			//buffer ~= line ~ "\n";
-			//continue;
-		//}
-	//}
-
 	return buffer;
 }
+unittest {
+	assert(removeBoolFunctions("if (!gtk_stock_lookup (foo, bla)) {") == "if (!FALSE) {\n");
+}
+
+
+// ----------------------------------------------------------------------------------------
+// Utils
 
 pure @nogc
 size_t skipToNested(string line, char needle, int nOccurrences, size_t start = 0) {
@@ -329,6 +349,9 @@ size_t skipToNested(string line, char needle, int nOccurrences, size_t start = 0
 		if (c == '(') {
 			parenLevel ++;
 		} else if (c == ')') {
+			if (c == needle && parenLevel == 0)
+				return i;
+
 			parenLevel --;
 		}
 	}
