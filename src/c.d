@@ -18,9 +18,7 @@ void portFile(string filename) {
 	contents = replaceFunctions(contents);
 	contents = fixStyleContextApi(contents);
 	contents = fixWidgetVfuncs(contents);
-	contents = fixMeasure1(contents);
-	contents = fixMeasure2(contents);
-	contents = fixMeasure3(contents);
+	contents = fixMeasure(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
@@ -71,6 +69,7 @@ unittest {
 }
 
 string fixWidgetVfuncs(string input) {
+	import std.ascii: isAlpha;
 	const string[] funcs = [
 		"get_preferred_width",
 		"get_preferred_height",
@@ -94,7 +93,8 @@ string fixWidgetVfuncs(string input) {
 		}
 
 		if (index == -1 ||
-		    index > 0 && line[index - 1] == ')') {
+		    (index > 0 && line[index - 1] == ')') ||
+		    (line[index + funcs[funcIndex].length + 2].isAlpha)) {
 			buffer ~= line ~ "\n";
 			continue;
 		}
@@ -105,37 +105,74 @@ string fixWidgetVfuncs(string input) {
 	return buffer;
 }
 
-string fixMeasure1(string input) {
+string fixMeasure(string input) {
+	const string[] funcs = [
+		"gtk_widget_get_preferred_height_and_baseline_for_width",
+		"gtk_widget_get_preferred_width_for_height",
+		"gtk_widget_get_preferred_height_for_width",
+		"gtk_widget_get_preferred_width",
+		"gtk_widget_get_preferred_height",
+		"->get_preferred_height_and_baseline_for_width",
+		"->get_preferred_width_for_height",
+		"->get_preferred_height_for_width",
+		"->get_preferred_width",
+		"->get_preferred_height"
+	];
 	string buffer;
 
 	auto lines = input.lineSplitter();
 	while (!lines.empty) {
 		string line = lines.front;
-		bool horizontal = true;
-		size_t index = line.indexOf("gtk_widget_get_preferred_width_for_height");
+		size_t index;
+		size_t funcIndex;
+		bool horizontal = false;
+		bool isVfunc = false;
+		bool for_size;
+
+		for (int i = 0; i < funcs.length; i ++) {
+			if ((index = line.indexOf(funcs[i])) != -1) {
+				funcIndex = i;
+				if (i >= 5)
+					isVfunc = true;
+				break;
+			}
+		}
 
 		if (index == -1) {
-			index = line.indexOf("gtk_widget_get_preferred_height_for_width");
-			if (index == -1) {
 				buffer ~= line ~ "\n";
 				lines.popFront();
 				continue;
-			}
-			horizontal = false;
 		}
+
+		// We could save this manually...
+		horizontal = funcs[funcIndex].canFind("_preferred_width");
+		for_size = funcs[funcIndex].canFind("_for_");
 
 		auto whitespace = line[0..index];
 		line = lines.collapseToLine(index);
 		string[] params = line.collectParams();
-		assert(params.length == 4);
+		int i = 0;
+
+		// Fill up with NULL
+		while(params.length < 6)
+			params ~= "NULL";
 
 		buffer ~= whitespace;
-		buffer ~= "gtk_widget_measure (" ~
-		          params[0] ~ ", " ~
-		          (horizontal ? "GTK_ORIENTATION_HORIZONTAL" : "GTK_ORIENTATION_VERTICAL") ~
-		          "," ~ params[1] ~
-		          "," ~ params[2] ~ "," ~ params[3] ~
-		          ", NULL, NULL);\n";
+		if (isVfunc) {
+			buffer ~= "->measure (";
+		} else {
+			buffer ~= "gtk_widget_measure (";
+		}
+
+		buffer ~= params[i++] ~ ", " ~
+				  (horizontal ? "GTK_ORIENTATION_HORIZONTAL" : "GTK_ORIENTATION_VERTICAL");
+		if (for_size) {
+			buffer ~= "," ~ params[i++];
+		} else {
+			buffer ~= ", -1";
+		}
+		buffer ~= "," ~ params[i++] ~ "," ~ params[i++] ~
+		          "," ~ params[i++] ~ "," ~ params[i++] ~ ");\n";
 
 		if (!lines.empty)
 			lines.popFront();
@@ -144,90 +181,19 @@ string fixMeasure1(string input) {
 	return buffer;
 }
 unittest {
-	//writeln("  gtk_widget_get_preferred_width_for_height (widget, 300, &min, &nat)".fixMeasure1());
-}
-
-string fixMeasure2(string input) {
-	string buffer;
-
-	auto lines = input.lineSplitter();
-	while (!lines.empty) {
-		string line = lines.front;
-		bool horizontal = true;
-		size_t index = line.indexOf("gtk_widget_get_preferred_width");
-
-		if (index == -1) {
-			index = line.indexOf("gtk_widget_get_preferred_height");
-			if (index == -1) {
-				buffer ~= line ~ "\n";
-				lines.popFront();
-				continue;
-			}
-			horizontal = false;
-		}
-
-		auto whitespace = line[0..index];
-		line = lines.collapseToLine(index);
-		string[] params = line.collectParams();
-		if (params.length != 3) {
-			writeln(line);
-			writeln(params);
-		}
-		assert(params.length == 3);
-
-		buffer ~= whitespace;
-		buffer ~= "gtk_widget_measure (" ~
-		          params[0] ~ ", " ~
-		          (horizontal ? "GTK_ORIENTATION_HORIZONTAL" : "GTK_ORIENTATION_VERTICAL") ~
-		          ", -1, " ~ params[1] ~ ", " ~ params[2] ~
-		          ", NULL, NULL);\n";
-
-		if (!lines.empty)
-			lines.popFront();
-	}
-
-	return buffer;
-}
-
-
-string fixMeasure3(string input) {
-	string buffer;
-
-	auto lines = input.lineSplitter();
-	while (!lines.empty) {
-		string line = lines.front;
-		size_t index = line.indexOf("gtk_widget_get_preferred_height_and_baseline_for_width");
-
-		if (index == -1) {
-			buffer ~= line ~ "\n";
-			lines.popFront();
-			continue;
-		}
-
-		auto whitespace = line[0..index];
-		line = lines.collapseToLine(index);
-		string[] params = line.collectParams();
-		assert(params.length == 6);
-
-		buffer ~= whitespace;
-		buffer ~= "gtk_widget_measure (" ~
-		          params[0] ~ ", " ~
-		          "GTK_ORIENTATION_VERTICAL" ~
-		          "," ~ params[1] ~
-		          "," ~ params[2] ~ "," ~ params[3] ~
-		          "," ~ params[4] ~ "," ~ params[5] ~ ");\n";
-
-		if (!lines.empty)
-			lines.popFront();
-	}
-
-	return buffer;
-}
-unittest {
-	//writeln("gtk_widget_get_preferred_height_and_baseline_for_width (widget, 400, &min, &nat, &min_baseline, &nat_baseline)".fixMeasure3());
+	//writeln("gtk_widget_get_preferred_height_and_baseline_for_width (widget, 400, &min, &nat, &min_baseline, &nat_baseline)".fixMeasure());
+	//writeln("gtk_widget_get_preferred_height (widget, 400, &min, &nat)".fixMeasure());
+	//writeln("GTK_WIDGET_CLASS(my_class)->get_preferred_width(widget, NULL, &nat);".fixMeasure());
 }
 
 string fixStyleContextApi(string input) {
+	const string[] funcs = [
+		"gtk_style_context_get_color",
+		"gtk_style_context_get_border",
+		"gtk_style_context_get_padding",
+		"gtk_style_context_get_margin",
+		"gtk_style_context_get_background_color", // Already deprecated will go away.
+	];
 	string buffer;
 
 	auto lines = input.lineSplitter();
@@ -235,8 +201,15 @@ string fixStyleContextApi(string input) {
 	while (!lines.empty) {
 		line = lines.front();
 		import std.ascii: isWhite;
-		size_t index = line.indexOf("gtk_style_context_get_color");
 
+		size_t index;
+		size_t funcIndex;
+		for (int i = 0; i < funcs.length; i ++) {
+			if ((index = line.indexOf(funcs[i])) != -1) {
+				funcIndex = i;
+				break;
+			}
+		}
 		if (index == -1) {
 			buffer ~= line ~ "\n";
 			lines.popFront();
@@ -467,6 +440,9 @@ string removeVoidFunctions(string input) {
 		"gtk_widget_set_no_show_all",
 		"gtk_button_set_image",
 		"gtk_widget_set_allocation",
+		"gtk_box_set_center_widget",
+		"gtk_label_set_angle",
+		"gtk_container_class_handle_border_width",
 		"gdk_window_process_updates",
 	];
 
@@ -504,6 +480,9 @@ string replaceFunctions(string input) {
 		Func("gdk_cairo_should_draw_window", "TRUE"),
 		Func("gtk_dialog_get_action_area", "gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0)"), // *shrug*.
 		Func("gtk_dialog_get_content_area", "gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0)"), // *shrug*.
+		Func("gtk_container_get_border_width", "0"),
+		Func("gtk_label_get_angle", "0"),
+		Func("gtk_window_has_toplevel_focus", "FALSE") // TODO: That's not the actual replacement.
 	];
 	string buffer;
 
