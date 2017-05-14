@@ -28,17 +28,17 @@ void main(string[] args) {
 			}
 			break;
 
-			case "ui": {
-				import ui;
-				portFile(filename);
-			}
-			break;
+			//case "ui": {
+				//import ui;
+				//portFile(filename);
+			//}
+			//break;
 
-			case "vala": {
-				import vala;
-				portFile(filename);
-			}
-			break;
+			//case "vala": {
+				//import vala;
+				//portFile(filename);
+			//}
+			//break;
 
 			/*
 			case "cpp":
