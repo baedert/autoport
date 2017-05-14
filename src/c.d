@@ -290,9 +290,12 @@ string fixBoxApi(string input) {
 	string line;
 	while (!lines.empty) {
 		line = lines.front;
+		string func = "gtk_box_pack_start";
 		size_t index = line.indexOf("gtk_box_pack_start");
-		if (index == -1)
+		if (index == -1) {
 			index = line.indexOf("gtk_box_pack_end");
+			func = "gtk_box_pack_end";
+		}
 
 		if (index == -1) {
 			buffer ~= line ~ "\n";
@@ -300,6 +303,8 @@ string fixBoxApi(string input) {
 			continue;
 		}
 
+		auto whitespace = line[0..index];
+		line = lines.collapseToLine(index);
 		// Remove last 3 parameters
 		// In other words, Everything after the second comma in the
 		// gtk_box_ call. First the instance, then the child.
@@ -309,26 +314,9 @@ string fixBoxApi(string input) {
 			buffer ~= line ~ "\n";
 			lines.popFront();
 			continue;
-		} else if (line.strip()[$ - 1] != ';') {
-			// The expression did *not* end on this line.
-			buffer ~= line[0..endIndex] ~ ");\n";
-			// Now the next line, which should contain either one, two or three of
-			// the leftover parameters.
-			lines.popFront();
-			line = lines.front;
-			// Do not append this line to @buffer in any case.
-			if (line.strip()[$ - 1] != ';') {
-				// Over >= 3 lines...
-				lines.popFront();
-				line = lines.front;
-				if (line.strip()[$ - 1] != ';') {
-					// This HAS to be the last one.
-				}
-			}
-			// Ok.
-			lines.popFront();
-			continue;
 		}
+
+		buffer ~= whitespace;
 		buffer ~= line[0..endIndex];
 		buffer ~= ");\n";
 		lines.popFront();
@@ -339,7 +327,7 @@ string fixBoxApi(string input) {
 unittest {
 	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d);") == "  gtk_box_pack_start(a, b);\n");
 	assert(fixBoxApi("gtk_box_pack_start(a, b, c, d, e);") == "gtk_box_pack_start(a, b);\n");
-	assert(fixBoxApi("gtk_box_pack_start(a,b,\nc,d,e);") == "gtk_box_pack_start(a,b);\n");
+	assert(fixBoxApi("gtk_box_pack_end(a,b,\nc,d,e);") == "gtk_box_pack_end(a,b);\n");
 }
 
 
@@ -444,6 +432,8 @@ string removeVoidFunctions(string input) {
 		"gtk_label_set_angle",
 		"gtk_container_class_handle_border_width",
 		"gtk_style_context_invalidate",
+		"gtk_window_set_has_resize_grip",
+		"gtk_tree_view_set_rules_hint",
 		"gdk_window_process_updates",
 	];
 
