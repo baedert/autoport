@@ -1,5 +1,7 @@
-#Autoport
+# Autoport
 
-semi-automatic monkey porting from gtk to gtk4.
+semi-automatic monkey porting from gtk3 to gtk4.
 
-It won't be perfect so don't try to make it.
+Usage: `autoport <list of files`.
+Currently only `.c` files are being ported.
+
