@@ -155,7 +155,7 @@ string fixMeasure(string input) {
 		int i = 0;
 
 		// Fill up with NULL
-		while(params.length < 6)
+		while (params.length < 6)
 			params ~= "NULL";
 
 		buffer ~= whitespace;
@@ -166,14 +166,19 @@ string fixMeasure(string input) {
 		}
 
 		buffer ~= params[i++] ~ ", " ~
-				  (horizontal ? "GTK_ORIENTATION_HORIZONTAL" : "GTK_ORIENTATION_VERTICAL");
+		          (horizontal ? "GTK_ORIENTATION_HORIZONTAL" : "GTK_ORIENTATION_VERTICAL");
+
 		if (for_size) {
 			buffer ~= "," ~ params[i++];
 		} else {
 			buffer ~= ", -1";
 		}
-		buffer ~= "," ~ params[i++] ~ "," ~ params[i++] ~
-		          "," ~ params[i++] ~ "," ~ params[i++] ~ ");\n";
+
+		buffer ~= "," ~ params[i]; i++;
+		buffer ~= "," ~ params[i]; i++;
+		buffer ~= "," ~ params[i]; i++;
+		buffer ~= "," ~ params[i]; i++;
+		buffer ~= ");\n";
 
 		if (!lines.empty)
 			lines.popFront();
@@ -604,11 +609,14 @@ unittest {
 	string oneLine = lines.collapseToLine(0);
 }
 
-pure
+//pure
 string[] collectParams(string input) {
 	size_t openParen = input.indexOf('(');
 	size_t closeParen = input.lastIndexOf(')');
 	size_t[] commaIndices =[openParen];
+
+	if (openParen == -1)
+		return [];
 
 	assert(!input.canFind("\n"));
 
@@ -620,6 +628,10 @@ string[] collectParams(string input) {
 	}
 
 	commaIndices ~= closeParen;
+
+	//writeln(input);
+	//writeln(commaIndices);
+
 	string[] params;
 
 	for (int i = 1; i < commaIndices.length; i ++) {
