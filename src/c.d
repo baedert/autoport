@@ -443,7 +443,8 @@ string removeVoidFunctions(string input) {
 		"gtk_window_set_has_resize_grip",
 		"gtk_tree_view_set_rules_hint",
 		"gdk_window_process_updates",
-		"gdk_window_set_background_pattern"
+		"gdk_window_set_background_pattern",
+		"gtk_tree_view_set_rules_hint"
 	];
 
 	string buffer;
@@ -482,7 +483,9 @@ string replaceFunctions(string input) {
 		Func("gtk_dialog_get_content_area", "gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0)"), // *shrug*.
 		Func("gtk_container_get_border_width", "0"),
 		Func("gtk_label_get_angle", "0"),
-		Func("gtk_window_has_toplevel_focus", "FALSE") // TODO: That's not the actual replacement.
+		Func("gtk_window_has_toplevel_focus", "FALSE"), // TODO: That's not the actual replacement.
+		Func("gtk_toggle_button_set_inconsistent", "gtk_check_button_set_inconsistent"),
+		Func("gtk_toggle_button_get_inconsistent", "gtk_check_button_get_inconsistent"),
 	];
 	string buffer;
 
