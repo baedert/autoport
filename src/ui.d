@@ -210,7 +210,7 @@ struct XmlParser {
 		import std.array;
 		import std.algorithm;
 
-		return lineStack.filter!(a => a.type != LineType.CRAP).map!(a => a.data).join("\n");
+		return lineStack.filter!(a => a.type != LineType.CRAP).map!(a => a.data).join("\n") ~ "\n";
 	}
 }
 
