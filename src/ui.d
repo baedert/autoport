@@ -48,7 +48,9 @@ string removeProps(string input) {
 		"app_paintable",
 		"app-paintable",
 		"ignore_hidden",
-		"ignore-hidden"
+		"ignore-hidden",
+		"border_width",
+		"border-width"
 	];
 	XmlParser parser = XmlParser(input.idup);
 	parser.parseAll();
