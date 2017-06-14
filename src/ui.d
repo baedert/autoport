@@ -27,7 +27,9 @@ string removeProps(string input) {
 		"no_show_all",
 		"no-show-all",
 		"app_paintable",
-		"app-paintable"
+		"app-paintable",
+		"ignore_hidden",
+		"ignore-hidden"
 	];
 	XmlParser parser = XmlParser(input.idup);
 	parser.parseAll();
