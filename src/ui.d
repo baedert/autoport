@@ -1,5 +1,6 @@
 import std.string;
 import std.algorithm;
+import std.stdio;
 
 void portFile(string filename) {
 	import std.file;
@@ -9,6 +10,7 @@ void portFile(string filename) {
 	// the same string over and over again.
 	contents = removeProps(contents);
 	contents = removeBoxChildProps(contents);
+	contents = removeBoxCenterChild(contents);
 
 	// Write result back
 	//std.file.write(filename ~ ".out", contents);
@@ -18,8 +20,6 @@ void portFile(string filename) {
 /* TODO:
   - margin_left -> margin_start
   - margin_right -> margin_end
-  - Remove type="child" from GtkBox center child
-  - Remove ignore-hidden from size groups
  */
 
 string removeProps(string input) {
@@ -69,6 +69,39 @@ string removeBoxChildProps(string input) {
 						    parsedParent.props["class"] == "GtkButtonBox") {
 							parser.removeLine(line);
 						}
+					}
+				}
+			}
+		}
+	}
+
+	return parser.toString();
+}
+
+string removeBoxCenterChild(string input) {
+	XmlParser parser = XmlParser(input.idup);
+	parser.parseAll();
+
+	foreach (ref line; parser.lineStack) {
+		if (line.type == LineType.CHILD) {
+			auto parsed = parseXmlLine(line);
+			string *v;
+			if ((v = "type" in parsed.props) != null) {
+				if (*v == "center") {
+					// <child type="center">
+					// Now check if it's inside a GtkBox. If so, remove the type parameter.
+					auto parent = parser.prevParent(line, LineType.OBJECT, -1);
+					auto parsedParent = parseXmlLine(parent);
+					if ("class" !in parsedParent.props)
+						continue;
+
+					if (parsedParent.props["class"] == "GtkBox") {
+						// The current line is a <child> of a GtkBox with
+						// type set to "center". However, in gtk4, GtkBox
+						// does not have a center child anymore.
+						auto startIndex = line.data.indexOf('<');
+						string whitespace = line.data[0..startIndex];
+						line.data = whitespace ~ "<child>";
 					}
 				}
 			}
@@ -250,8 +283,6 @@ ParsedLine parseXmlLine(ref XmlLine inputLine) {
 
 	if (inputLine.data[endIndex - 1] != '/' &&
 	    endIndex < inputLine.data.length - 1) {
-	  import std.stdio;
-		//writeln(inputLine);
 		auto endTagStart = inputLine.data.indexOf('<', endIndex + 1);
 		if (endTagStart != -1) {
 			// -1 happens e.g. for "label" properties with multiline strings.
@@ -263,11 +294,14 @@ ParsedLine parseXmlLine(ref XmlLine inputLine) {
 	// TODO: Support more than one...
 	//import std.stdio;
 	size_t pos = startIndex + 1 + result.name.length + 1;
+	if (pos >= inputLine.data.length - 1) {
+		return result;
+	}
 	string propName = parseToken(inputLine.data[pos..$]);
 	//writeln(propName);
 	pos += propName.length;
-	import std.stdio;
 	if (pos > inputLine.data.length - 1) {
+	  writeln("propName: ", propName);
 	  writeln(inputLine.data);
 	  writeln(inputLine);
 	}
