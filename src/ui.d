@@ -11,16 +11,35 @@ void portFile(string filename) {
 	contents = removeProps(contents);
 	contents = removeBoxChildProps(contents);
 	contents = removeBoxCenterChild(contents);
+	contents = fixRemovedMargins(contents);
 
 	// Write result back
 	//std.file.write(filename ~ ".out", contents);
 	std.file.write(filename, contents);
 }
 
-/* TODO:
-  - margin_left -> margin_start
-  - margin_right -> margin_end
- */
+string fixRemovedMargins(string input) {
+	XmlParser parser = XmlParser(input.idup);
+	parser.parseAll();
+
+	foreach (ref line; parser.lineStack) {
+		if (line.type == LineType.PROPERTY) {
+			auto parsed = parseXmlLine(line);
+			string *v;
+			if ((v = "name" in parsed.props) != null) {
+				if (*v == "margin_left" ||
+				    *v == "margin-left") {
+					line.data = line.data.replace("left", "start"); // :]
+				} else if (*v == "margin_right" ||
+				           *v == "margin-right") {
+					line.data = line.data.replace("right", "end");
+				}
+			}
+		}
+	}
+
+	return parser.toString();
+}
 
 string removeProps(string input) {
 	immutable string[] funcsToRemove = [
