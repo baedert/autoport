@@ -454,7 +454,10 @@ string removeVoidFunctions(string input) {
 		"gtk_tree_view_set_rules_hint",
 		"gdk_window_process_updates",
 		"gdk_window_set_background_pattern",
-		"gtk_tree_view_set_rules_hint"
+		"gtk_tree_view_set_rules_hint",
+		"gtk_widget_class_install_style_property",
+		"gtk_widget_set_clip",
+		"gtk_widget_style_get"
 	];
 
 	string buffer;
@@ -622,7 +625,7 @@ unittest {
 	string oneLine = lines.collapseToLine(0);
 }
 
-//pure
+pure
 string[] collectParams(string input) {
 	size_t openParen = input.indexOf('(');
 	size_t closeParen = input.lastIndexOf(')');
@@ -654,5 +657,6 @@ string[] collectParams(string input) {
 	return params;
 }
 unittest {
-	"foo(a, b)".collectParams();
+	auto params = "foo(a, b)".collectParams();
+	assert(params == ["a", " b"]); // Preserves whitespace!
 }
