@@ -19,9 +19,10 @@ void portFile(string filename) {
 	contents = fixStyleContextApi(contents);
 	contents = fixWidgetVfuncs(contents);
 	contents = fixMeasure(contents);
+	contents = fixSizeAllocate(contents);
 
 	// Write result back
-	std.file.write(filename, contents);
+	std.file.write(filename ~".out", contents);
 }
 
 string fixGtkInit(string input) {
@@ -530,6 +531,53 @@ string replaceFunctions(string input) {
 }
 unittest {
 	assert(replaceFunctions("if (!gtk_stock_lookup (foo, bla)) {") == "if (!FALSE) {\n");
+}
+
+string fixSizeAllocate(string input) {
+	string buffer;
+
+	auto lines = input.lineSplitter;
+	while (!lines.empty) {
+		auto line = lines.front;
+		size_t index = line.indexOf("gtk_widget_size_allocate_with_baseline");
+
+		if (index != -1) {
+			// Just replace this with gtk_widget_size_allocate.
+			buffer ~= line[0..index];
+			buffer ~= "gtk_widget_size_allocate";
+			buffer ~= line[index + "gtk_widget_size_allocate_with_baseline".length .. $];
+			buffer ~= "\n";
+			lines.popFront();
+			continue;
+		}
+
+		index = line.indexOf("gtk_widget_size_allocate");
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
+
+		// gtk_widget_size_allocate gained a baseline and an out_param parameter.
+		string call = lines.collapseToLine(index);
+		auto params = call.collectParams();
+		if (params.length == 2) {
+			// Not ported yet.
+			assert(call[$ - 1] == ';');
+			assert(call[$ - 2] == ')');
+			buffer ~= line[0..index]; // Whitespace
+			buffer ~= call[0..$ - 2];
+			// The NULL here will break at runtime, but it will compile.
+			buffer ~= ", -1, NULL);";
+			lines.popFront();
+		} else {
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
+	}
+	return buffer;
 }
 
 
