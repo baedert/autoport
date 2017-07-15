@@ -224,6 +224,13 @@ string fixStyleContextApi(string input) {
 
 		auto whitespace = line[0..index];
 		line = lines.collapseToLine(index);
+		auto params = line.collectParams();
+		if (params.length < 3) {
+			// Maybe aleady ported...
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
 		// This function lost its *middle* parameter.
 		size_t openParenIndex = line.indexOf('(');
 		size_t firstCommaIndex = line.skipToNested(',', 1, openParenIndex + 1);
@@ -241,6 +248,9 @@ string fixStyleContextApi(string input) {
 }
 unittest {
 	assert(fixStyleContextApi("gtk_style_context_get_color(a, b | foo(abc), &d);") == "gtk_style_context_get_color(a, &d);\n");
+
+	string s = "gtk_style_context_get_color (a, b);";
+	assert(fixStyleContextApi(s) == (s ~ "\n"));
 }
 
 string fixCssProvider(string input) {
