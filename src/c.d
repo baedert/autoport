@@ -228,7 +228,7 @@ string fixStyleContextApi(string input) {
 		auto params = line.collectParams();
 		if (params.length < 3) {
 			// Maybe aleady ported...
-			buffer ~= line ~ "\n";
+			buffer ~= whitespace ~ line ~ "\n";
 			lines.popFront();
 			continue;
 		}
