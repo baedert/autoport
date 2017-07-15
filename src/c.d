@@ -22,7 +22,7 @@ void portFile(string filename) {
 	contents = fixSizeAllocate(contents);
 
 	// Write result back
-	std.file.write(filename ~".out", contents);
+	std.file.write(filename, contents);
 }
 
 string fixGtkInit(string input) {
