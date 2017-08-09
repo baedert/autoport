@@ -458,7 +458,8 @@ string removeVoidFunctions(string input) {
 		"gtk_tree_view_set_rules_hint",
 		"gtk_widget_class_install_style_property",
 		"gtk_widget_set_clip",
-		"gtk_widget_style_get"
+		"gtk_widget_style_get",
+		"gtk_widget_set_redraw_on_alloc"
 	];
 
 	string buffer;
