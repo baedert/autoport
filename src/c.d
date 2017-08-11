@@ -23,6 +23,7 @@ void portFile(string filename) {
 
 	// Write result back
 	std.file.write(filename, contents);
+	//writeln(contents);
 }
 
 string fixGtkInit(string input) {
@@ -462,11 +463,16 @@ string removeVoidFunctions(string input) {
 		"gtk_widget_set_redraw_on_alloc",
 		"gtk_widget_push_composite_child",
 		"gtk_widget_pop_composite_child",
+		"gtk_widget_add_events",
+		"gtk_window_set_wmclass",
+		"gdk_window_set_background_rgba"
 	];
 
 	string buffer;
 
-	foreach (line; input.lineSplitter()) {
+	auto lines = input.lineSplitter;
+	while (!lines.empty) {
+		auto line = lines.front;
 		size_t index;
 		size_t funcIndex;
 
@@ -479,8 +485,16 @@ string removeVoidFunctions(string input) {
 
 		if (index == -1) {
 			buffer ~= line ~ "\n";
+			lines.popFront();
 			continue;
 		}
+
+		// The functions listed above should return void
+		// and they could span over multiple lines so we need to remove the entire thing.
+		auto funcCall = lines.collapseToLine(index);
+
+		// Don't do anything with funcCall sinec we just want to skip it.
+		lines.popFront();
 	}
 
 	return buffer;
