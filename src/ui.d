@@ -371,6 +371,7 @@ ParsedLine parseXmlLine(ref XmlLine inputLine) {
 	}
 	assert(inputLine.data[pos] == '=');
 	pos ++;
+	pos = inputLine.data.indexOf('"', pos); // Skip to "
 	assert(inputLine.data[pos] == '"');
 	pos ++;
 	string propValue = parseToken(inputLine.data[pos..$]);
