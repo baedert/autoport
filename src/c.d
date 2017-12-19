@@ -16,6 +16,7 @@ void portFile(string filename) {
 	contents = fixMisc(contents);
 	contents = removeVoidFunctions(contents);
 	contents = replaceFunctions(contents);
+	contents = fixRenamedFunctions(contents);
 	contents = fixStyleContextApi(contents);
 	contents = fixWidgetVfuncs(contents);
 	contents = fixMeasure(contents);
@@ -505,8 +506,8 @@ unittest {
 
 string replaceFunctions(string input) {
 	struct Func { string name; string replacement; }
-	// These have no replacement, but their value can be replaced by a simple TRUE or FALSE.
-	// Of course, fixing things that way is not ideal but it makes the project compile.
+	// These return a value, so we can't just remove the function call altogether.
+	// Instead, try to replace them by something remotely useful
 	const Func[] funcs = [
 		Func("gtk_stock_lookup", "FALSE"),
 		Func("gtk_cairo_should_draw_window", "TRUE"),
@@ -515,8 +516,6 @@ string replaceFunctions(string input) {
 		Func("gtk_container_get_border_width", "0"),
 		Func("gtk_label_get_angle", "0"),
 		Func("gtk_window_has_toplevel_focus", "FALSE"), // TODO: That's not the actual replacement.
-		Func("gtk_toggle_button_set_inconsistent", "gtk_check_button_set_inconsistent"),
-		Func("gtk_toggle_button_get_inconsistent", "gtk_check_button_get_inconsistent"),
 	];
 	string buffer;
 
@@ -548,6 +547,52 @@ string replaceFunctions(string input) {
 }
 unittest {
 	assert(replaceFunctions("if (!gtk_stock_lookup (foo, bla)) {") == "if (!FALSE) {\n");
+}
+
+string fixRenamedFunctions(string input) {
+	struct Func { string name; string replacement; }
+	// These have no replacement, but their value can be replaced by a simple TRUE or FALSE.
+	// Of course, fixing things that way is not ideal but it makes the project compile.
+	const Func[] funcs = [
+		Func("gtk_toggle_button_set_inconsistent", "gtk_check_button_set_inconsistent"),
+		Func("gtk_toggle_button_get_inconsistent", "gtk_check_button_get_inconsistent"),
+		Func("gtk_header_bar_set_show_close_button", "gtk_header_bar_set_show_title_buttons"),
+		Func("gtk_style_context_add_provider_for_screen", "gtk_style_context_add_provider_for_display"),
+		// These are not equivalent of course, but let's hope this one works out.
+		Func("gdk_screen_get_default", "gdk_display_get_default"),
+	];
+	string buffer;
+
+	foreach (line; input.lineSplitter) {
+		size_t index;
+		size_t funcIndex;
+
+		for (auto i = 0; i < funcs.length; i ++) {
+			if ((index = line.indexOf(funcs[i].name)) != -1) {
+				funcIndex = i;
+				break;
+			}
+		}
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			continue;
+		}
+
+		// Replace function call with replacement
+		size_t openParenIndex =  line[index..$].indexOf('(') + index;
+		size_t closeParenIndex = line.skipToNested(')', 0, openParenIndex + 1);
+		buffer ~= line[0..index];
+		buffer ~= funcs[funcIndex].replacement;
+		buffer ~= line[index + funcs[funcIndex].name.length..openParenIndex]; // Whitespace
+		buffer ~= line[openParenIndex + 0..$];
+		buffer ~= "\n";
+	}
+	return buffer;
+}
+unittest {
+	assert(fixRenamedFunctions("gtk_header_bar_set_show_close_button (FOO (abc), TRUE);\n") ==
+	       "gtk_header_bar_set_show_title_buttons (FOO (abc), TRUE);\n");
 }
 
 string fixSizeAllocate(string input) {
