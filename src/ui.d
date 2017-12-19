@@ -12,6 +12,7 @@ void portFile(string filename) {
 	contents = removeBoxChildProps(contents);
 	contents = removeBoxCenterChild(contents);
 	contents = fixRemovedMargins(contents);
+	contents = fixCloseButtonApi(contents);
 
 	// Write result back
 	//std.file.write(filename ~ ".out", contents);
@@ -130,6 +131,48 @@ string removeBoxCenterChild(string input) {
 	}
 
 	return parser.toString();
+}
+
+string fixCloseButtonApi(string input) {
+	// Due to unclear API naming, GtkHeaderBar:show-close-button has been renamed in GTK4
+	// to GtkHeaderBar:show-title-buttons, which means that the former won't work anymore in UI files.
+	XmlParser parser = XmlParser(input.idup);
+	parser.parseAll();
+
+	// Unfortunately, the "show-close-button" property name isn't unique even inside GTK+,
+	// GtkSearchBar has one like that too.
+	foreach (ref line; parser.lineStack) {
+		if (line.type == LineType.PROPERTY) {
+			auto parent= parser.prevParent(line, LineType.OBJECT, -1);
+
+			if (parent != parser.garbage) {
+				auto parsedParent = parseXmlLine(parent);
+
+				// We can only fix these for GtkHeaderBar instances.
+				if (parsedParent.props["class"] != "GtkHeaderBar")
+					continue;
+			}
+
+			auto parsed = parseXmlLine(line);
+			string *v;
+			if ((v = ("name" in parsed.props)) != null) {
+				if (*v == "show-close-button") {
+					line.data = line.data.replace("show-close-button", "show-title-buttons");
+				} else if (*v == "show_close_button") {
+					line.data = line.data.replace("show_close_button", "show-title-buttons");
+				}
+			}
+		}
+	}
+
+	return parser.toString();
+}
+unittest {
+	assert(fixCloseButtonApi("<object class=\"GtkHeaderBar\">\n<property name=\"show_close_button\">1</property>\n") ==
+	       "<object class=\"GtkHeaderBar\">\n<property name=\"show-title-buttons\">1</property>\n");
+	// Leave non-headerbars alone
+	assert(fixCloseButtonApi("<object class=\"GtkSearchBar\">\n<property name=\"show_close_button\">1</property>\n") ==
+	       "<object class=\"GtkSearchBar\">\n<property name=\"show_close_button\">1</property>\n");
 }
 
 enum LineType {
