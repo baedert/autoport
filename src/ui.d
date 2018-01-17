@@ -9,6 +9,7 @@ void portFile(string filename) {
 	// Again, for better debuggability, we parse (almost)
 	// the same string over and over again.
 	contents = removeProps(contents);
+	contents = removeSignals(contents);
 	contents = removeBoxChildProps(contents);
 	contents = removeBoxCenterChild(contents);
 	contents = fixRemovedMargins(contents);
@@ -58,6 +59,59 @@ string removeProps(string input) {
 
 	foreach (ref line; parser.lineStack) {
 		if (line.type == LineType.PROPERTY) {
+			auto parsed = parseXmlLine(line);
+			string *v;
+			if ((v = "name" in parsed.props) != null) {
+				if (funcsToRemove.canFind(*v)) {
+					parser.removeLine(line);
+				}
+			}
+		}
+	}
+
+	return parser.toString();
+}
+
+string removeSignals(string input) {
+	immutable string[] funcsToRemove = [
+		"delete-event", // TODO: We could replace these with GtkWindow::close-request
+		"delete_event",
+		"button-press-event",
+		"button_press_event",
+		"button-release-event",
+		"button_press_event",
+		"motion-notify-event",
+		"motion_notify_event",
+		"focus-in-event",
+		"focus_in_event",
+		"focus-out-event",
+		"focus_out_event",
+		"event-after",
+		"event_after",
+		"grab-broken-event",
+		"grab_broken_event",
+		"map-event",
+		"map_event",
+		"unmap-event",
+		"unmap_event",
+		"destroy-event",
+		"destroy_event",
+		"scroll-event",
+		"scroll_event",
+		"touch-event",
+		"touch_event",
+		"configure-event",
+		"configure_event",
+		"proximity-in-event",
+		"proximity_in_event",
+		"proximity-out-event",
+		"proximity_out_event",
+	];
+	XmlParser parser = XmlParser(input.idup);
+	parser.parseAll();
+
+	foreach (ref line; parser.lineStack) {
+		if (line.type == LineType.SIGNAL) {
 			auto parsed = parseXmlLine(line);
 			string *v;
 			if ((v = "name" in parsed.props) != null) {
@@ -189,6 +243,7 @@ enum LineType {
 	PROPERTY_END,
 	PACKING_PROPERTY,
 	PACKING_PROPERTY_END,
+	SIGNAL,
 }
 
 struct XmlLine {
@@ -281,6 +336,10 @@ struct XmlParser {
 					type = LineType.PACKING_PROPERTY;
 				else
 					type = isEnd ? LineType.PROPERTY_END : LineType.PROPERTY;
+
+				appendLine(line, type);
+			} else if (ident == "signal") {
+				auto type = LineType.SIGNAL;
 
 				appendLine(line, type);
 			} else {
@@ -391,6 +450,11 @@ unittest {
 	assert(parsed.text == "zomg");
 	assert(parsed.props.length == 1);
 	assert(parsed.props["name"] == "foo");
+
+	testLine = XmlLine(0, "<signal name=\"delete-event\" handler=\"foobar\" />");
+	parsed = parseXmlLine(testLine);
+	assert(parsed.name == "signal");
+	assert(parsed.props["name"] == "delete-event");
 }
 
 pure @nogc splitsXml(char c) {
