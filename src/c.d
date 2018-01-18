@@ -21,6 +21,7 @@ void portFile(string filename) {
 	contents = fixWidgetVfuncs(contents);
 	contents = fixMeasure(contents);
 	contents = fixSizeAllocate(contents);
+	contents = fixSignalConnections(contents);
 
 	// Write result back
 	std.file.write(filename, contents);
@@ -642,9 +643,75 @@ string fixSizeAllocate(string input) {
 	return buffer;
 }
 
+string fixSignalConnections(string input) {
+	string buffer;
+
+	auto lines = input.lineSplitter;
+	while (!lines.empty) {
+		auto line = lines.front;
+		auto index = line.indexOf("g_signal_connect");
+
+		if (!line.whitespaceUntil(cast(int)index - 1) ||
+		    index == -1) {
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
+
+		string whitespace = line[0..index];
+		string call = lines.collapseToLine(index);
+		auto params = call.collectParams();
+		if (params.length != 4) {
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
+
+		string signalName = params[1].strip()[1..$-1];
+
+		// Do all here manually since we don't have a lot of these
+		if (signalName == "delete-event") {
+			// This only works if the Object we connect to is a GtkWindow of course,
+			// but that's the only sane object to connect to delete-event as well.
+			buffer ~= whitespace ~ call.replace("delete-event", "close-request") ~ "\n";
+		} else {
+			// Irrelevant.
+			// TODO: This is the 'collapsed' function call, but if we didn't change anything,
+			//       we should just save the uncollapsed one.
+			buffer ~= whitespace ~ call ~ "\n";
+		}
+
+		lines.popFront();
+	}
+
+	return buffer;
+}
+unittest {
+	auto result = "   g_signal_connect (G_OBJECT (foo), \"delete-event\",\n G_CALLBACK (PENIS), NULL);"
+	              .fixSignalConnections();
+	assert(result[0..3] == "   ");
+	assert(!result.canFind("delete-event"));
+	assert(result.canFind("close-request"));
+}
+
 
 // ----------------------------------------------------------------------------------------
 // Utils
+
+pure @nogc
+bool whitespaceUntil(string input, int index) {
+	import std.ascii: isWhite;
+	for (int i = 0 ; i < index; i ++) {
+		if (!input[index].isWhite())
+			return false;
+	}
+
+	return true;
+}
+unittest {
+	assert("    a".whitespaceUntil(3));
+	assert(!"    a".whitespaceUntil(4));
+}
 
 pure @nogc
 size_t skipToNested(string line, char needle, int nOccurrences, size_t start = 0) {
