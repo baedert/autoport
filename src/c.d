@@ -520,7 +520,8 @@ string removeVoidFunctions(string input) {
 		"gtk_widget_pop_composite_child",
 		"gtk_widget_add_events",
 		"gtk_window_set_wmclass",
-		"gdk_window_set_background_rgba"
+		"gdk_window_set_background_rgba",
+		"gdk_flush",
 	];
 
 	string buffer;
