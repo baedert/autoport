@@ -368,8 +368,6 @@ string fixImageApi(string input) {
 			continue;
 		}
 
-		writeln("Found line: ", line);
-		writeln("Index: ", index);
 		auto whitespace = line[0..index];
 		line = lines.collapseToLine(index);
 
