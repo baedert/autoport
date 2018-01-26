@@ -10,6 +10,7 @@ void portFile(string filename) {
 	string contents = readText(filename);
 
 	contents = fixBoxApi(contents);
+	contents = fixImageApi(contents);
 	contents = fixGtkInit(contents);
 	contents = fixCssProvider(contents);
 	contents = fixShowAll(contents);
@@ -25,7 +26,6 @@ void portFile(string filename) {
 
 	// Write result back
 	std.file.write(filename, contents);
-	//writeln(contents);
 }
 
 string fixGtkInit(string input) {
@@ -350,6 +350,60 @@ unittest {
 	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d);") == "  gtk_box_pack_start(a, b);\n");
 	assert(fixBoxApi("gtk_box_pack_start(a, b, c, d, e);") == "gtk_box_pack_start(a, b);\n");
 	assert(fixBoxApi("gtk_box_pack_end(a,b,\nc,d,e);") == "gtk_box_pack_end(a,b);\n");
+}
+
+string fixImageApi(string input) {
+	string buffer;
+
+	auto lines = input.lineSplitter();
+	string line;
+	while (!lines.empty) {
+		line = lines.front;
+		string func = "gtk_image_new_from_icon_name";
+		size_t index = line.indexOf(func);
+
+		if (index == -1) {
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
+
+		writeln("Found line: ", line);
+		writeln("Index: ", index);
+		auto whitespace = line[0..index];
+		line = lines.collapseToLine(index);
+
+		// Remove the second parameter.
+		// In other words, only leave the first parameter, which means
+		// we remove everything after the first comma.
+
+		size_t commaIndex = line.indexOf(',');
+		if (commaIndex == -1) {
+			// Huh?
+			writeln(__LINE__, ": No comma found in line '", line, "'");
+			buffer ~= line;
+			lines.popFront();
+			continue;
+		}
+
+		// TODO: This is broken if the function call contains another function call.
+		size_t endParenIndex = line.indexOf(')');
+		auto suffix = line[endParenIndex..$];
+
+		buffer ~= whitespace;
+		buffer ~= line[0..commaIndex];
+		buffer ~= suffix;
+		buffer ~= "\n";
+		lines.popFront();
+	}
+
+	return buffer;
+}
+unittest {
+	auto result = fixImageApi("    some_func (gtk_image_new_from_icon_name(\"list-add-symbolic\", GTK_ICON_SIZE_FOOBAR));");
+	assert(result.startsWith("    some_func "));
+	assert(!result.canFind("ICON_SIZE"));
+	assert(result.endsWith("));\n"));
 }
 
 
