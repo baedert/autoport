@@ -52,7 +52,9 @@ string removeProps(string input) {
 		"ignore_hidden",
 		"ignore-hidden",
 		"border_width",
-		"border-width"
+		"border-width",
+		"stock_size",
+		"stock-size"
 	];
 	XmlParser parser = XmlParser(input.idup);
 	parser.parseAll();
