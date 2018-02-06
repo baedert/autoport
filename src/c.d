@@ -615,6 +615,7 @@ string fixRenamedFunctions(string input) {
 		Func("gtk_style_context_add_provider_for_screen", "gtk_style_context_add_provider_for_display"),
 		// These are not equivalent of course, but let's hope this one works out.
 		Func("gdk_screen_get_default", "gdk_display_get_default"),
+		Func("gtk_widget_show_now", "gtk_widget_show"), // Not technically renamed, but that's the replacement
 	];
 	string buffer;
 
@@ -648,6 +649,8 @@ string fixRenamedFunctions(string input) {
 unittest {
 	assert(fixRenamedFunctions("gtk_header_bar_set_show_close_button (FOO (abc), TRUE);\n") ==
 	       "gtk_header_bar_set_show_title_buttons (FOO (abc), TRUE);\n");
+
+	assert(fixRenamedFunctions("gtk_widget_show_now (button);\n") == "gtk_widget_show (button);\n");
 }
 
 string fixSizeAllocate(string input) {
