@@ -312,10 +312,12 @@ string fixBoxApi(string input) {
 	string line;
 	while (!lines.empty) {
 		line = lines.front;
-		string func = "gtk_box_pack_start";
 		size_t index = line.indexOf("gtk_box_pack_start");
+		bool is_pack_end = false;
+		string func = "gtk_box_pack_start";
 		if (index == -1) {
 			index = line.indexOf("gtk_box_pack_end");
+			is_pack_end = true;
 			func = "gtk_box_pack_end";
 		}
 
@@ -333,13 +335,13 @@ string fixBoxApi(string input) {
 		size_t endIndex = skipToNested(line, ',', 2, line.indexOf('(') + 1);
 		if (endIndex == cast(size_t)-1) {
 			// No comma found. Already ported?
-			buffer ~= line ~ "\n";
+			buffer ~= line.replace(func, "gtk_container_add") ~ "\n";
 			lines.popFront();
 			continue;
 		}
 
 		buffer ~= whitespace;
-		buffer ~= line[0..endIndex];
+		buffer ~= line[0..endIndex].replace(func, "gtk_container_add");
 		buffer ~= ");\n";
 		lines.popFront();
 	}
@@ -347,9 +349,9 @@ string fixBoxApi(string input) {
 	return buffer;
 }
 unittest {
-	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d);") == "  gtk_box_pack_start(a, b);\n");
-	assert(fixBoxApi("gtk_box_pack_start(a, b, c, d, e);") == "gtk_box_pack_start(a, b);\n");
-	assert(fixBoxApi("gtk_box_pack_end(a,b,\nc,d,e);") == "gtk_box_pack_end(a,b);\n");
+	assert(fixBoxApi("  gtk_box_pack_start(a, b, c, d);") == "  gtk_container_add(a, b);\n");
+	assert(fixBoxApi("gtk_box_pack_start(a, b, c, d, e);") == "gtk_container_add(a, b);\n");
+	assert(fixBoxApi("gtk_box_pack_end(a,b,\nc,d,e);") == "gtk_container_add(a,b);\n");
 }
 
 string fixImageApi(string input) {
