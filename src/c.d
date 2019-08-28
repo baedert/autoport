@@ -160,7 +160,7 @@ string fixMeasure(string input) {
 
 		// Fill up with NULL
 		while (params.length < 6)
-			params ~= "NULL";
+			params ~= " NULL";
 
 		buffer ~= whitespace;
 		if (isVfunc) {
@@ -688,8 +688,7 @@ string fixSizeAllocate(string input) {
 			assert(call[$ - 2] == ')');
 			buffer ~= line[0..index]; // Whitespace
 			buffer ~= call[0..$ - 2];
-			// The NULL here will break at runtime, but it will compile.
-			buffer ~= ", -1, NULL);";
+			buffer ~= ", -1);";
 			lines.popFront();
 		} else {
 			buffer ~= line ~ "\n";
@@ -706,10 +705,19 @@ string fixSignalConnections(string input) {
 	auto lines = input.lineSplitter;
 	while (!lines.empty) {
 		auto line = lines.front;
+
+		// Ignore macros
+		if (line.startsWith("#define")) {
+			buffer ~= line ~ "\n";
+			lines.popFront();
+			continue;
+		}
+
 		auto index = line.indexOf("g_signal_connect");
 
 		if (!line.whitespaceUntil(cast(int)index - 1) ||
 		    index == -1) {
+			//writeln("Ignoring line '", line, "'");
 			buffer ~= line ~ "\n";
 			lines.popFront();
 			continue;
@@ -719,7 +727,7 @@ string fixSignalConnections(string input) {
 		string call = lines.collapseToLine(index);
 		auto params = call.collectParams();
 		if (params.length != 4) {
-			buffer ~= line ~ "\n";
+			buffer ~= whitespace ~ call ~ "\n";
 			lines.popFront();
 			continue;
 		}
@@ -744,13 +752,39 @@ string fixSignalConnections(string input) {
 	return buffer;
 }
 unittest {
-	auto result = "   g_signal_connect (G_OBJECT (foo), \"delete-event\",\n G_CALLBACK (PENIS), NULL);"
+	auto result = "   g_signal_connect (G_OBJECT (foo), \"delete-event\",\n G_CALLBACK (zomg), NULL);"
 	              .fixSignalConnections();
 	assert(result[0..3] == "   ");
 	assert(!result.canFind("delete-event"));
 	assert(result.canFind("close-request"));
-}
 
+	// Should not alter other signal connections though...
+	result =
+q{  g_signal_connect (self->addins,
+                    "extension-added",
+                    G_CALLBACK (_ide_buffer_addin_load_cb),
+                    self);
+};
+	//writeln("-----------------------------------");
+	auto fixed = result.fixSignalConnections();
+	//writeln("-----------------------------------");
+	auto lines = fixed.lineSplitter;
+	assert(lines.array.length == 4);
+	assert(fixed == result);
+
+	result =
+q{  g_signal_connect_object (self->addins,
+                               "extension-added",
+                               G_CALLBACK (_ide_buffer_addin_load_cb),
+                               self);
+};
+	//writeln("-----------------------------------");
+	fixed = result.fixSignalConnections();
+	//writeln("-----------------------------------");
+	lines = fixed.lineSplitter;
+	assert(lines.array.length == 4);
+	assert(fixed == result);
+}
 
 // ----------------------------------------------------------------------------------------
 // Utils
@@ -821,7 +855,7 @@ unittest {
 }
 
 // TODO: accept an end character?
-pure
+//pure
 string collapseToLine(R)(ref R input, size_t start_index)
 	if (isInputRange!R)
 {
@@ -829,6 +863,7 @@ string collapseToLine(R)(ref R input, size_t start_index)
 	assert(start_index < input.front.length);
 
 	string buffer = input.front[start_index..$];
+	//writeln("buffer: ", buffer);
 
 	if (buffer.canFind(';'))
 		return buffer;
@@ -837,13 +872,16 @@ string collapseToLine(R)(ref R input, size_t start_index)
 	input.popFront();
 	while (!input.empty) {
 		string line = input.front;
+		//writeln("line: '", line, "'");
 		size_t start = line.skipToNonWhitespace();
 		if (start == -1) {
 			// Just whitespace...
 			input.popFront();
 			continue;
 		}
-		buffer ~= line[start..$];
+		//buffer ~= line[start..$];
+		buffer ~= "\n";
+		buffer ~= line;
 
 		if (line.canFind(';'))
 			break;
@@ -868,8 +906,6 @@ string[] collectParams(string input) {
 	if (openParen == -1)
 		return [];
 
-	assert(!input.canFind("\n"));
-
 	int occ = 1;
 	size_t index;
 	while((index = skipToNested(input, ',', occ, openParen + 1)) != -1) {
@@ -893,4 +929,11 @@ string[] collectParams(string input) {
 unittest {
 	auto params = "foo(a, b)".collectParams();
 	assert(params == ["a", " b"]); // Preserves whitespace!
+
+	params =
+q{ g_signal_connect (first,
+        second,
+        third);
+}.collectParams();
+	//writeln(params);
 }
